@@ -10,11 +10,11 @@
 
 .dialog-box {
   background: #fff;
-  border-radius: 8px;
+  border-radius: 12px;
   max-width: 600px;
   width: min(95%, 600px);
   padding: 0;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.12);
   overflow: hidden;
 }
 
@@ -23,8 +23,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 16px 18px;
-  border-bottom: 1px solid #e0e0e0;
-  background: #f7f7f7;
+  border-bottom: 1px solid #e9ecef;
+  background: #f8f9fa;
 }
 
 .dialog-header h3 {
@@ -57,10 +57,10 @@
 .dialog-footer .btn {
   min-width: 90px;
 }
- 
-table th a {
-  cursor: pointer;
-  text-decoration: none;
-  color: inherit;
+
+.navbar-nav .nav-link.active {
+  font-weight: 600;
 }
- 
+
+.table th {
+  cursor: pointer;
