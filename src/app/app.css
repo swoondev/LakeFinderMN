@@ -65,3 +65,13 @@
 .table th {
   cursor: pointer;
 }
+
+/* Table gridlines */
+.table {
+  border-collapse: collapse;
+  border: 1px solid #dee2e6;
+}
+.table th,
+.table td {
+  border: 1px solid #dee2e6;
+}

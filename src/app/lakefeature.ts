@@ -1,14 +1,13 @@
 import { ChangeDetectorRef, Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
 import { staticcontent } from './global/globals';
 import { Api } from './api';
 
 @Component({
   selector: 'lake-feature',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule],
   templateUrl: './lakefeature.html',
   styleUrls: ['./lakefeature.css']
 })

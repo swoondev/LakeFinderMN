@@ -5,6 +5,18 @@ import { FormsModule } from '@angular/forms';
 import { staticcontent } from './global/globals';
 import { Api } from './api';
 
+interface Filters {
+  averageWeightMin?: string;
+  averageWeightMax?: string;
+  surveyYearFrom?: string;
+  surveyYearTo?: string;
+  totalMin?: string;
+  totalMax?: string;
+  lakeSizeMin?: string;
+  lakeSizeMax?: string;
+  [key: string]: any;
+}
+
 @Component({
   selector: 'app-home',
   standalone: true,
@@ -120,6 +132,7 @@ export class Home {
 
         this.fishtable.push({
           name: element.name,
+          lakeSize: survey.result?.areaAcres ?? element.areaAcres ?? 'N/A',
           speciesdata: speciesdata[speciesdata.length - 1],
           fishlengths: {
             zero: fishlenarray[0],
@@ -184,8 +197,10 @@ export class Home {
 
   dialogVisible = false;
   dialogContent = '';
+  searched: boolean = false;
 
   async searchLakes(countyInput: number) {
+    this.searched = true;
     this.setStatus('Initializing search...');
     this.currentcounty = '';
     this.lakeCount = '';
@@ -230,6 +245,8 @@ export class Home {
           return Number(lake.speciesdata?.averageWeight) || 0;
         case 'surveyDate':
           return new Date(lake.surveyDate).getTime() || 0;
+        case 'lakeSize':
+          return Number(lake.lakeSize) || 0;
         case 'zero':
         case 'one':
         case 'two':
@@ -278,5 +295,139 @@ export class Home {
 
   public closeDialog() {
     this.dialogVisible = false;
+  }
+
+  public saveAsPdf() {
+    window.print();
+  }
+
+  // Per-column filters bound from header inputs
+  filters: Filters = {};
+
+  // Computed filtered table based on `filters` map.
+  get filteredFishtable() {
+    // If no filters are set, return full table
+    const hasAny = Object.keys(this.filters).some((k) => {
+      const v = (this.filters as any)[k];
+      return v !== undefined && v !== null && v !== '';
+    });
+    if (!hasAny) return this.fishtable;
+
+    return this.fishtable.filter((lake: any) => {
+      // Average weight numeric range
+      const minAW = this.filters.averageWeightMin ? parseFloat(this.filters.averageWeightMin) : NaN;
+      const maxAW = this.filters.averageWeightMax ? parseFloat(this.filters.averageWeightMax) : NaN;
+      if (!isNaN(minAW) || !isNaN(maxAW)) {
+        const val = Number(lake.speciesdata?.averageWeight) || 0;
+        if (!isNaN(minAW) && val < minAW) return false;
+        if (!isNaN(maxAW) && val > maxAW) return false;
+      }
+
+      // Survey year range
+      const fromYear = this.filters.surveyYearFrom ? parseInt(this.filters.surveyYearFrom, 10) : NaN;
+      const toYear = this.filters.surveyYearTo ? parseInt(this.filters.surveyYearTo, 10) : NaN;
+      if (!isNaN(fromYear) || !isNaN(toYear)) {
+        const sd = lake.surveyDate ? new Date(lake.surveyDate) : null;
+        if (!sd) return false;
+        const y = sd.getFullYear();
+        if (!isNaN(fromYear) && y < fromYear) return false;
+        if (!isNaN(toYear) && y > toYear) return false;
+      }
+
+      // Lake size numeric range (acres)
+      const minSize = this.filters.lakeSizeMin ? parseFloat(this.filters.lakeSizeMin) : NaN;
+      const maxSize = this.filters.lakeSizeMax ? parseFloat(this.filters.lakeSizeMax) : NaN;
+      if (!isNaN(minSize) || !isNaN(maxSize)) {
+        const val = Number(lake.lakeSize);
+        if (!isNaN(minSize) && val < minSize) return false;
+        if (!isNaN(maxSize) && val > maxSize) return false;
+      }
+
+      // Total numeric range
+      const minT = this.filters.totalMin ? parseFloat(this.filters.totalMin) : NaN;
+      const maxT = this.filters.totalMax ? parseFloat(this.filters.totalMax) : NaN;
+      if (!isNaN(minT) || !isNaN(maxT)) {
+        const val = Number(lake.fishlengths?.total) || 0;
+        if (!isNaN(minT) && val < minT) return false;
+        if (!isNaN(maxT) && val > maxT) return false;
+      }
+
+      return true;
+    });
+  }
+
+  // Return unique options for a column to populate dropdowns in the header.
+  getColumnOptions(column: string): string[] {
+    const set = new Set<string>();
+    for (const lake of this.fishtable) {
+      let val: any = '';
+      if (column === 'name') val = lake.name;
+      else if (column === 'averageWeight') val = lake.speciesdata?.averageWeight;
+      else if (column === 'surveyDate') val = lake.surveyDate ? new Date(lake.surveyDate).getFullYear() : '';
+      else val = lake.fishlengths?.[column];
+
+      if (val !== undefined && val !== null && val !== '') set.add(val.toString());
+    }
+
+    const arr = Array.from(set);
+    // numeric sort when all values are numeric
+    const allNumeric = arr.every((v) => !isNaN(Number(v)));
+    if (allNumeric) return arr.map((v) => Number(v)).sort((a, b) => a - b).map((n) => n.toString());
+    return arr.sort((a, b) => a.localeCompare(b));
+  }
+
+  // Generate average weight options from 0 to max in 0.5 increments
+  getAverageWeightOptions(): string[] {
+    let max = 0;
+    for (const lake of this.fishtable) {
+      const v = Number(lake.speciesdata?.averageWeight);
+      if (!isNaN(v) && v > max) max = v;
+    }
+    const maxStep = Math.ceil(max * 2) / 2; // round up to nearest 0.5
+    const opts: string[] = [];
+    for (let v = 0; v <= maxStep; v = Math.round((v + 0.5) * 100) / 100) {
+      opts.push(v.toFixed(1));
+      if (v + 0.5 > maxStep) break;
+    }
+    return opts;
+  }
+
+  // Generate lake size (acres) options for dropdowns
+  getLakeSizeOptions(): string[] {
+    let max = 0;
+    for (const lake of this.fishtable) {
+      const v = Number(lake.lakeSize);
+      if (!isNaN(v) && v > max) max = v;
+    }
+
+    // sensible threshold steps
+    const thresholds = [0, 1, 5, 10, 25, 50, 100, 250, 500, 1000];
+    const opts: number[] = [];
+    for (const t of thresholds) {
+      if (t <= max) opts.push(t);
+    }
+    if (max > thresholds[thresholds.length - 1]) opts.push(Math.ceil(max));
+
+    // ensure unique and sorted
+    const uniq = Array.from(new Set(opts)).sort((a, b) => a - b);
+    return uniq.map((n) => n.toString());
+  }
+
+  // Generate unique survey years from fishtable for dropdown
+  getSurveyYearOptions(): string[] {
+    const set = new Set<number>();
+    for (const lake of this.fishtable) {
+      if (lake.surveyDate) {
+        const year = new Date(lake.surveyDate).getFullYear();
+        set.add(year);
+      }
+    }
+    const arr = Array.from(set).sort((a, b) => a - b);
+    return arr.map((n) => n.toString());
+  }
+
+  public clearFilters() {
+    this.filters = {} as any;
+    this.cdr.detectChanges();
   }
 }
