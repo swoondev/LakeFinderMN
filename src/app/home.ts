@@ -1,4 +1,4 @@
-﻿import { Component, signal, ChangeDetectorRef } from '@angular/core';
+﻿import { Component, signal, ChangeDetectorRef, OnInit } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -8,6 +8,8 @@ import { Api } from './api';
 interface Filters {
   averageWeightMin?: string;
   averageWeightMax?: string;
+  distanceMin?: string;
+  distanceMax?: string;
   surveyYearFrom?: string;
   surveyYearTo?: string;
   totalMin?: string;
@@ -24,7 +26,7 @@ interface Filters {
   templateUrl: './home.html',
   styleUrls: ['./app.css']
 })
-export class Home {
+export class Home implements OnInit {
   protected readonly title = signal('LakeFinderMN');
   countyInput: number = 0;
   speciesInput: string = '';
@@ -44,10 +46,75 @@ export class Home {
   constructor(private apiService: Api, private cdr: ChangeDetectorRef, private sanitizer: DomSanitizer) {}
 
   safeDialogContent: SafeHtml = '';
+  currentLocation: { latitude: number; longitude: number } | null = null;
+  locationStatus = '';
+  private locationRequested = false;
+
+  ngOnInit(): void {
+    this.requestCurrentLocation();
+  }
 
   private setStatus(message: string) {
     this.searchstatus = message;
     this.cdr.detectChanges();
+  }
+
+  private requestCurrentLocation(): void {
+    if (this.locationRequested || typeof navigator === 'undefined' || !('geolocation' in navigator)) {
+      return;
+    }
+
+    this.locationRequested = true;
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        this.currentLocation = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude
+        };
+        this.locationStatus = 'Using your current location for distance.';
+        this.updateLakeDistances();
+        this.cdr.detectChanges();
+      },
+      () => {
+        this.locationStatus = 'Location unavailable; distance will show as N/A.';
+        this.cdr.detectChanges();
+      }
+    );
+  }
+
+  public getDistanceMiles(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const earthRadiusMiles = 3958.8;
+    const toRadians = (value: number) => (value * Math.PI) / 180;
+
+    const dLat = toRadians(lat2 - lat1);
+    const dLon = toRadians(lon2 - lon1);
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLon / 2) ** 2;
+
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return earthRadiusMiles * c;
+  }
+
+  private updateLakeDistances(): void {
+    if (!this.currentLocation) {
+      return;
+    }
+
+    this.fishtable = this.fishtable.map((lake: any) => ({
+      ...lake,
+      distanceMiles: this.getDistanceMilesForLake(lake)
+    }));
+    this.cdr.detectChanges();
+  }
+
+  private getDistanceMilesForLake(lake: any): number | null {
+    if (!this.currentLocation || !Array.isArray(lake.waterAccess) || lake.waterAccess.length < 2) {
+      return null;
+    }
+
+    const [longitude, latitude] = lake.waterAccess as [number, number];
+    return this.getDistanceMiles(this.currentLocation.latitude, this.currentLocation.longitude, latitude, longitude);
   }
 
   public GoToLake(lakeid: number) {
@@ -153,7 +220,8 @@ export class Home {
           surveyDate: latestSurvey.surveyDate,
           lakeid: element.id,
           narrative: latestSurvey.narrative,
-          waterAccess: element.point['epsg:4326']
+          waterAccess: element.point['epsg:4326'],
+          distanceMiles: this.getDistanceMilesForLake({ waterAccess: element.point['epsg:4326'] })
         });
       }
 
@@ -243,6 +311,8 @@ export class Home {
           return (lake.name || '').toString().toLowerCase();
         case 'averageWeight':
           return Number(lake.speciesdata?.averageWeight) || 0;
+        case 'distance':
+          return Number(lake.distanceMiles ?? Number.POSITIVE_INFINITY) || Number.POSITIVE_INFINITY;
         case 'surveyDate':
           return new Date(lake.surveyDate).getTime() || 0;
         case 'lakeSize':
@@ -321,6 +391,15 @@ export class Home {
         const val = Number(lake.speciesdata?.averageWeight) || 0;
         if (!isNaN(minAW) && val < minAW) return false;
         if (!isNaN(maxAW) && val > maxAW) return false;
+      }
+
+      // Distance range
+      const minDistance = this.filters.distanceMin ? parseFloat(this.filters.distanceMin) : NaN;
+      const maxDistance = this.filters.distanceMax ? parseFloat(this.filters.distanceMax) : NaN;
+      if (!isNaN(minDistance) || !isNaN(maxDistance)) {
+        const val = Number(lake.distanceMiles);
+        if (!isNaN(minDistance) && val < minDistance) return false;
+        if (!isNaN(maxDistance) && val > maxDistance) return false;
       }
 
       // Survey year range

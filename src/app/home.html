@@ -28,13 +28,14 @@
     <table class="table table-striped">
         <thead>
             <tr>
-                <th colspan="5"></th>
+                <th colspan="6"></th>
                 <th colspan="13" class="text-center">Fish lengths</th>
                 <th></th>
             </tr>
             <tr>
                 <th>#</th>
                 <th><a href="javascript:void(0)" (click)="sortBy('name')">Name <span *ngIf="sortColumn==='name'">{{ sortDirection==='asc' ? '▲' : '▼' }}</span></a></th>
+                <th><a href="javascript:void(0)" (click)="sortBy('distance')">Distance <span *ngIf="sortColumn==='distance'">{{ sortDirection==='asc' ? '▲' : '▼' }}</span></a></th>
                 <th><a href="javascript:void(0)" (click)="sortBy('averageWeight')">Average Weight <span *ngIf="sortColumn==='averageWeight'">{{ sortDirection==='asc' ? '▲' : '▼' }}</span></a></th>
                 <th><a href="javascript:void(0)" (click)="sortBy('surveyDate')">Survey Date <span *ngIf="sortColumn==='surveyDate'">{{ sortDirection==='asc' ? '▲' : '▼' }}</span></a></th>
                 <th><a href="javascript:void(0)" (click)="sortBy('lakeSize')">Lake Size <span *ngIf="sortColumn==='lakeSize'">{{ sortDirection==='asc' ? '▲' : '▼' }}</span></a></th>
@@ -56,6 +57,12 @@
             <tr>
                 <th></th>
                 <th></th>
+                <th>
+                    <div class="d-flex">
+                        <input type="number" step="0.1" [(ngModel)]="filters.distanceMin" class="form-control form-control-sm me-1" placeholder="Min" />
+                        <input type="number" step="0.1" [(ngModel)]="filters.distanceMax" class="form-control form-control-sm" placeholder="Max" />
+                    </div>
+                </th>
                 <th>
                     <div class="d-flex">
                         <select class="form-select form-select-sm me-1" [(ngModel)]="filters.averageWeightMin">
@@ -132,6 +139,7 @@
                         <font size="2">Lake Topo Chart</font>
                     </button>
                 </td>
+                <td>{{ lake.distanceMiles !== null && lake.distanceMiles !== undefined ? (lake.distanceMiles | number:'1.0-1') + ' mi' : 'N/A' }}</td>
                 <td>{{ lake.speciesdata.averageWeight }}</td>
                 <td>{{ lake.surveyDate | date:'shortDate' }}</td>
                 <td>{{ lake.lakeSize !== null && lake.lakeSize !== undefined ? lake.lakeSize : 'N/A' }}</td>

@@ -26,16 +26,19 @@
 </div>
 
 <div class="col-lg-12 mt-3" *ngIf="lakeTableData.length">
+    <div class="mb-2 text-end">
+        <button type="button" class="btn btn-sm btn-secondary" (click)="clearFilters()">Clear filters</button>
+    </div>
     <table class="table table-striped">
         <thead>
             <tr>
-                <th colspan="5"></th>
-                <th colspan="13" class="text-center">Fish lengths</th>
-                <th></th>
+                <th colspan="6"></th>
+                <th colspan="14" class="text-center">Fish lengths</th>
             </tr>
             <tr>
                 <th>#</th>
                 <th><a href="javascript:void(0)" (click)="sortBy('name')">Name <span *ngIf="sortColumn==='name'">{{ sortDirection==='asc' ? '▲' : '▼' }}</span></a></th>
+                <th><a href="javascript:void(0)" (click)="sortBy('distance')">Distance <span *ngIf="sortColumn==='distance'">{{ sortDirection==='asc' ? '▲' : '▼' }}</span></a></th>
                 <th><a href="javascript:void(0)" (click)="sortBy('averageWeight')">Average Weight <span *ngIf="sortColumn==='averageWeight'">{{ sortDirection==='asc' ? '▲' : '▼' }}</span></a></th>
                 <th><a href="javascript:void(0)" (click)="sortBy('surveyDate')">Survey Date <span *ngIf="sortColumn==='surveyDate'">{{ sortDirection==='asc' ? '▲' : '▼' }}</span></a></th>
                 <th><a href="javascript:void(0)" (click)="sortBy('lakeSize')">Lake Size <span *ngIf="sortColumn==='lakeSize'">{{ sortDirection==='asc' ? '▲' : '▼' }}</span></a></th>
@@ -54,9 +57,73 @@
                 <th><a href="javascript:void(0)" (click)="sortBy('twelve')">50-100" <span *ngIf="sortColumn==='twelve'">{{ sortDirection==='asc' ? '▲' : '▼' }}</span></a></th>
                 <th><a href="javascript:void(0)" (click)="sortBy('total')">Total <span *ngIf="sortColumn==='total'">{{ sortDirection==='asc' ? '▲' : '▼' }}</span></a></th>
             </tr>
+            <tr>
+                <th></th>
+                <th></th>
+                <th>
+                    <div class="d-flex">
+                        <input type="number" step="0.1" [(ngModel)]="filters.distanceMin" class="form-control form-control-sm me-1" placeholder="Min" />
+                        <input type="number" step="0.1" [(ngModel)]="filters.distanceMax" class="form-control form-control-sm" placeholder="Max" />
+                    </div>
+                </th>
+                <th>
+                    <div class="d-flex">
+                        <select class="form-select form-select-sm me-1" [(ngModel)]="filters.averageWeightMin">
+                            <option value="">Min</option>
+                            <option *ngFor="let o of getAverageWeightOptions()" [value]="o">{{ o }}</option>
+                        </select>
+                        <select class="form-select form-select-sm" [(ngModel)]="filters.averageWeightMax">
+                            <option value="">Max</option>
+                            <option *ngFor="let o of getAverageWeightOptions()" [value]="o">{{ o }}</option>
+                        </select>
+                    </div>
+                </th>
+                <th>
+                    <div class="d-flex flex-column">
+                        <select class="form-select form-select-sm" [(ngModel)]="filters.surveyYearFrom">
+                            <option value="">From year</option>
+                            <option *ngFor="let o of getSurveyYearOptions()" [value]="o">{{ o }}</option>
+                        </select>
+                        <select class="form-select form-select-sm mt-1" [(ngModel)]="filters.surveyYearTo">
+                            <option value="">To year</option>
+                            <option *ngFor="let o of getSurveyYearOptions()" [value]="o">{{ o }}</option>
+                        </select>
+                    </div>
+                </th>
+                <th>
+                    <div class="d-flex">
+                        <select class="form-select form-select-sm me-1" [(ngModel)]="filters.lakeSizeMin">
+                            <option value="">Min</option>
+                            <option *ngFor="let o of getLakeSizeOptions()" [value]="o">{{ o }}</option>
+                        </select>
+                        <select class="form-select form-select-sm" [(ngModel)]="filters.lakeSizeMax">
+                            <option value="">Max</option>
+                            <option *ngFor="let o of getLakeSizeOptions()" [value]="o">{{ o }}</option>
+                        </select>
+                    </div>
+                </th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th>
+                    <div class="d-flex flex-column">
+                        <input type="number" step="1" [(ngModel)]="filters.totalMin" class="form-control form-control-sm" placeholder="Min" />
+                        <input type="number" step="1" [(ngModel)]="filters.totalMax" class="form-control form-control-sm mt-1" placeholder="Max" />
+                    </div>
+                </th>
+            </tr>
         </thead>
         <tbody>
-            <tr *ngFor="let lake of lakeTableData; let i = index">
+            <tr *ngFor="let lake of filteredLakeTableData; let i = index">
                 <th scope="row">{{ i + 1 }}</th>
                 <td>
                     <a href="javascript:void(0)" (click)="GoToLake(lake.lakeid)">{{ lake.name }}</a>
@@ -74,6 +141,7 @@
                         <font size="2">Lake Topo Chart</font>
                     </button>
                 </td>
+                <td>{{ lake.distanceMiles !== null && lake.distanceMiles !== undefined ? (lake.distanceMiles | number:'1.0-1') + ' mi' : 'N/A' }}</td>
                 <td>{{ lake.speciesdata?.averageWeight ?? 'N/A' }}</td>
                 <td>{{ lake.surveyDate | date:'shortDate' }}</td>
                 <td>{{ lake.lakeSize !== null && lake.lakeSize !== undefined ? lake.lakeSize : 'N/A' }}</td>

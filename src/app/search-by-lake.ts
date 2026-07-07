@@ -1,9 +1,23 @@
-import { ChangeDetectorRef, Component } from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { staticcontent } from './global/globals';
 import { Api } from './api';
+
+interface Filters {
+  averageWeightMin?: string;
+  averageWeightMax?: string;
+  distanceMin?: string;
+  distanceMax?: string;
+  surveyYearFrom?: string;
+  surveyYearTo?: string;
+  totalMin?: string;
+  totalMax?: string;
+  lakeSizeMin?: string;
+  lakeSizeMax?: string;
+  [key: string]: any;
+}
 
 @Component({
   selector: 'search-by-lake',
@@ -12,7 +26,7 @@ import { Api } from './api';
   templateUrl: './search-by-lake.html',
   styleUrls: ['./search-by-lake.css']
 })
-export class SearchByLake {
+export class SearchByLake implements OnInit {
   lakeName = '';
   countyInput = 0;
   speciesInput = '';
@@ -28,12 +42,78 @@ export class SearchByLake {
   dialogVisible = false;
   dialogContent = '';
   safeDialogContent: SafeHtml = '';
+  currentLocation: { latitude: number; longitude: number } | null = null;
+  locationStatus = '';
+  filters: Filters = {};
+  private locationRequested = false;
 
   constructor(private apiService: Api, private cdr: ChangeDetectorRef, private sanitizer: DomSanitizer) {}
+
+  ngOnInit(): void {
+    this.requestCurrentLocation();
+  }
 
   private setStatus(message: string) {
     this.searchstatus = message;
     this.cdr.detectChanges();
+  }
+
+  private requestCurrentLocation(): void {
+    if (this.locationRequested || typeof navigator === 'undefined' || !('geolocation' in navigator)) {
+      return;
+    }
+
+    this.locationRequested = true;
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        this.currentLocation = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude
+        };
+        this.locationStatus = 'Using your current location for distance.';
+        this.updateLakeDistances();
+        this.cdr.detectChanges();
+      },
+      () => {
+        this.locationStatus = 'Location unavailable; distance will show as N/A.';
+        this.cdr.detectChanges();
+      }
+    );
+  }
+
+  public getDistanceMiles(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const earthRadiusMiles = 3958.8;
+    const toRadians = (value: number) => (value * Math.PI) / 180;
+
+    const dLat = toRadians(lat2 - lat1);
+    const dLon = toRadians(lon2 - lon1);
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLon / 2) ** 2;
+
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return earthRadiusMiles * c;
+  }
+
+  private updateLakeDistances(): void {
+    if (!this.currentLocation) {
+      return;
+    }
+
+    this.lakeTableData = this.lakeTableData.map((lake: any) => ({
+      ...lake,
+      distanceMiles: this.getDistanceMilesForLake(lake)
+    }));
+    this.cdr.detectChanges();
+  }
+
+  private getDistanceMilesForLake(lake: any): number | null {
+    if (!this.currentLocation || !Array.isArray(lake.waterAccess) || lake.waterAccess.length < 2) {
+      return null;
+    }
+
+    const [longitude, latitude] = lake.waterAccess as [number, number];
+    return this.getDistanceMiles(this.currentLocation.latitude, this.currentLocation.longitude, latitude, longitude);
   }
 
     private GetLengthCount(survey: any, species: string, min: number, max: number) {
@@ -151,7 +231,8 @@ export class SearchByLake {
               surveyDate: latestSurvey.surveyDate,
               lakeid: lake.id,
               narrative: latestSurvey.narrative,
-              waterAccess: lake.point?.['epsg:4326']
+              waterAccess: lake.point?.['epsg:4326'],
+              distanceMiles: this.getDistanceMilesForLake({ waterAccess: lake.point?.['epsg:4326'] })
             });
           }
         } catch (innerErr) {
@@ -200,6 +281,112 @@ export class SearchByLake {
     this.dialogVisible = false;
   }
 
+  get filteredLakeTableData() {
+    const hasAny = Object.keys(this.filters).some((k) => {
+      const v = (this.filters as any)[k];
+      return v !== undefined && v !== null && v !== '';
+    });
+
+    if (!hasAny) {
+      return this.lakeTableData;
+    }
+
+    return this.lakeTableData.filter((lake: any) => {
+      const minAW = this.filters.averageWeightMin ? parseFloat(this.filters.averageWeightMin) : NaN;
+      const maxAW = this.filters.averageWeightMax ? parseFloat(this.filters.averageWeightMax) : NaN;
+      if (!isNaN(minAW) || !isNaN(maxAW)) {
+        const val = Number(lake.speciesdata?.averageWeight) || 0;
+        if (!isNaN(minAW) && val < minAW) return false;
+        if (!isNaN(maxAW) && val > maxAW) return false;
+      }
+
+      const minDistance = this.filters.distanceMin ? parseFloat(this.filters.distanceMin) : NaN;
+      const maxDistance = this.filters.distanceMax ? parseFloat(this.filters.distanceMax) : NaN;
+      if (!isNaN(minDistance) || !isNaN(maxDistance)) {
+        const val = Number(lake.distanceMiles);
+        if (!isNaN(minDistance) && val < minDistance) return false;
+        if (!isNaN(maxDistance) && val > maxDistance) return false;
+      }
+
+      const fromYear = this.filters.surveyYearFrom ? parseInt(this.filters.surveyYearFrom, 10) : NaN;
+      const toYear = this.filters.surveyYearTo ? parseInt(this.filters.surveyYearTo, 10) : NaN;
+      if (!isNaN(fromYear) || !isNaN(toYear)) {
+        const sd = lake.surveyDate ? new Date(lake.surveyDate) : null;
+        if (!sd) return false;
+        const y = sd.getFullYear();
+        if (!isNaN(fromYear) && y < fromYear) return false;
+        if (!isNaN(toYear) && y > toYear) return false;
+      }
+
+      const minSize = this.filters.lakeSizeMin ? parseFloat(this.filters.lakeSizeMin) : NaN;
+      const maxSize = this.filters.lakeSizeMax ? parseFloat(this.filters.lakeSizeMax) : NaN;
+      if (!isNaN(minSize) || !isNaN(maxSize)) {
+        const val = Number(lake.lakeSize);
+        if (!isNaN(minSize) && val < minSize) return false;
+        if (!isNaN(maxSize) && val > maxSize) return false;
+      }
+
+      const minT = this.filters.totalMin ? parseFloat(this.filters.totalMin) : NaN;
+      const maxT = this.filters.totalMax ? parseFloat(this.filters.totalMax) : NaN;
+      if (!isNaN(minT) || !isNaN(maxT)) {
+        const val = Number(lake.fishlengths?.total) || 0;
+        if (!isNaN(minT) && val < minT) return false;
+        if (!isNaN(maxT) && val > maxT) return false;
+      }
+
+      return true;
+    });
+  }
+
+  getAverageWeightOptions(): string[] {
+    let max = 0;
+    for (const lake of this.lakeTableData) {
+      const v = Number(lake.speciesdata?.averageWeight);
+      if (!isNaN(v) && v > max) max = v;
+    }
+
+    const maxStep = Math.ceil(max * 2) / 2;
+    const opts: string[] = [];
+    for (let v = 0; v <= maxStep; v = Math.round((v + 0.5) * 100) / 100) {
+      opts.push(v.toFixed(1));
+      if (v + 0.5 > maxStep) break;
+    }
+    return opts;
+  }
+
+  getLakeSizeOptions(): string[] {
+    let max = 0;
+    for (const lake of this.lakeTableData) {
+      const v = Number(lake.lakeSize);
+      if (!isNaN(v) && v > max) max = v;
+    }
+
+    const thresholds = [0, 1, 5, 10, 25, 50, 100, 250, 500, 1000];
+    const opts: number[] = [];
+    for (const t of thresholds) {
+      if (t <= max) opts.push(t);
+    }
+    if (max > thresholds[thresholds.length - 1]) opts.push(Math.ceil(max));
+
+    return Array.from(new Set(opts)).sort((a, b) => a - b).map((n) => n.toString());
+  }
+
+  getSurveyYearOptions(): string[] {
+    const set = new Set<number>();
+    for (const lake of this.lakeTableData) {
+      if (lake.surveyDate) {
+        const year = new Date(lake.surveyDate).getFullYear();
+        set.add(year);
+      }
+    }
+    return Array.from(set).sort((a, b) => a - b).map((n) => n.toString());
+  }
+
+  clearFilters() {
+    this.filters = {} as any;
+    this.cdr.detectChanges();
+  }
+
   private getSelectedSpeciesText(): string {
     const selected = this.species.find((s: any) => s.Id == this.speciesInput);
     return selected?.Species?.trim() ?? this.speciesInput?.trim() ?? '';
@@ -231,6 +418,8 @@ export class SearchByLake {
           return (lake.name || '').toString().toLowerCase();
         case 'averageWeight':
           return Number(lake.speciesdata?.averageWeight) || 0;
+        case 'distance':
+          return Number(lake.distanceMiles ?? Number.POSITIVE_INFINITY) || Number.POSITIVE_INFINITY;
         case 'surveyDate':
           return new Date(lake.surveyDate).getTime() || 0;
         case 'lakeSize':
