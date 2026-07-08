@@ -45,6 +45,7 @@ export class SearchByLake implements OnInit {
   currentLocation: { latitude: number; longitude: number } | null = null;
   locationStatus = '';
   filters: Filters = {};
+  expandedLakeGroups: Record<string, boolean> = {};
   private locationRequested = false;
 
   constructor(private apiService: Api, private cdr: ChangeDetectorRef, private sanitizer: DomSanitizer) {}
@@ -118,12 +119,19 @@ export class SearchByLake implements OnInit {
 
     private GetLengthCount(survey: any, species: string, min: number, max: number) {
     let count = 0;
-    if (survey.lengths[species] != undefined) {
-      for (let i = 0; i < survey.lengths[species].fishCount.length; i++) {
-        if (survey.lengths[species].fishCount[i][0] >= min && survey.lengths[species].fishCount[i][0] <= max) {
-          count += survey.lengths[species].fishCount[i][1];
-        }
-      }
+    const fishCountEntries = Array.isArray(survey?.lengths?.[species]?.fishCount)
+      ? survey.lengths[species].fishCount
+      : [];
+    for (const entry of fishCountEntries) {
+      const values = Array.isArray(entry)
+        ? entry
+        : typeof entry === 'string'
+          ? entry.trim().split(/\s+/)
+          : [];
+      const sizeValue = Number(values[0]);
+      const countValue = Number(values[1]);
+      if (!Number.isFinite(sizeValue) || !Number.isFinite(countValue)) { continue; }
+      if (sizeValue >= min && sizeValue <= max) { count += countValue; }
     }
     return count;
   }
@@ -133,7 +141,7 @@ export class SearchByLake implements OnInit {
 
     private revealfishlengthstats(survey: any, species: string) {
     const fishlen: any[] = [];
-    const speciesKey = species || survey.species;
+    const speciesKey = typeof species === 'string' && species.trim() ? species : '';
     fishlen.push(this.GetLengthCount(survey, speciesKey, 0, 5));
     fishlen.push(this.GetLengthCount(survey, speciesKey, 6, 7));
     fishlen.push(this.GetLengthCount(survey, speciesKey, 8, 9));
@@ -156,15 +164,14 @@ export class SearchByLake implements OnInit {
     this.isSearching = true;
     this.searchResult = null;
     this.lakeTableData = [];
+    this.expandedLakeGroups = {};
+    this.cdr.detectChanges();
 
     const query = name?.trim();
     if (!query) {
+      this.isSearching = false;
+      this.cdr.detectChanges();
       this.setStatus('Please enter a lake name.');
-      return;
-    }
-
-    if (!this.speciesInput) {
-      this.setStatus('Please select a species.');
       return;
     }
 
@@ -178,83 +185,124 @@ export class SearchByLake implements OnInit {
 
       this.setStatus(`Found ${result.results.length} matching lake(s). Retrieving survey data...`);
 
-      // Process all matching lakes
-      for (let lakeIndex = 0; lakeIndex < result.results.length; lakeIndex++) {
-        const lake = result.results[lakeIndex];
-        try {
-          const survey = await this.apiService.GetLakeData(lake.id);
-
-          if (!survey || survey.status !== 'SUCCESS' || survey.message !== 'Normal execution.') {
-            continue;
-          }
-
-          const surveyData = Array.isArray(survey.result?.surveys) ? survey.result.surveys : [];
-          if (!surveyData.length) {
-            continue;
-          }
-
-          const normalizedSurveyData = surveyData.map((data: any) => ({ ...data, surveyDate: new Date(data.surveyDate) }));
-          normalizedSurveyData.sort((a: any, b: any) => a.surveyDate - b.surveyDate);
-          const standardSurveys = normalizedSurveyData.filter((x: any) => x.surveyType == 'Standard Survey');
-
-          const latestSurvey = standardSurveys[standardSurveys.length - 1];
-          if (!latestSurvey) {
-            continue;
-          }
-
-          const speciesToAnalyze = this.speciesInput;
-          const fishlenarray = this.revealfishlengthstats(latestSurvey, speciesToAnalyze);
-          const speciesdata = (latestSurvey.fishCatchSummaries ?? []).filter((fish: any) => fish.species == speciesToAnalyze);
-
-          if (fishlenarray[13] > 0) {
-            this.lakeTableData.push({
-              name: lake.name,
-              county: lake.county,
-              lakeSize: survey.result?.areaAcres ?? lake.area ?? 'N/A',
-              speciesdata: speciesdata[speciesdata.length - 1] ?? null,
-              fishlengths: {
-                zero: fishlenarray[0],
-                one: fishlenarray[1],
-                two: fishlenarray[2],
-                three: fishlenarray[3],
-                four: fishlenarray[4],
-                five: fishlenarray[5],
-                six: fishlenarray[6],
-                seven: fishlenarray[7],
-                eight: fishlenarray[8],
-                nine: fishlenarray[9],
-                ten: fishlenarray[10],
-                eleven: fishlenarray[11],
-                twelve: fishlenarray[12],
-                total: fishlenarray[13]
-              },
-              surveyDate: latestSurvey.surveyDate,
-              lakeid: lake.id,
-              narrative: latestSurvey.narrative,
-              waterAccess: lake.point?.['epsg:4326'],
-              distanceMiles: this.getDistanceMilesForLake({ waterAccess: lake.point?.['epsg:4326'] })
-            });
-          }
-        } catch (innerErr) {
-          console.error(`Error processing lake ${lake.name}:`, innerErr);
-          continue;
-        }
+      const batchSize = 6;
+      const totalCount = result.results.length;
+      for (let start = 0; start < totalCount; start += batchSize) {
+        const batch = result.results.slice(start, start + batchSize);
+        await Promise.allSettled(batch.map((lake: any, i: number) => this.processLakeResult(lake, start + i + 1, totalCount)));
+        this.cdr.detectChanges();
+        await this.delay(0);
       }
-
-      this.cdr.detectChanges();
 
       if (this.lakeTableData.length === 0) {
-        this.setStatus(`No lakes found with sampled fish for species ${this.speciesInput ? this.species.find((s: any) => s.Id === this.speciesInput)?.Species : 'any'}.`);
+        this.setStatus('No lakes found with survey data.');
       } else {
-        this.setStatus(`Found ${this.lakeTableData.length} lake(s) with survey data.`);
+        this.setStatus(`Found ${this.lakeTableData.length} row(s) across ${this.groupedLakeTableData.length} lake(s).`);
       }
-      this.isSearching = false;
-
     } catch (err) {
       console.error(err);
       this.setStatus('Error searching for lakes by name.');
+    } finally {
       this.isSearching = false;
+      this.cdr.detectChanges();
     }
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  private async processLakeResult(lake: any, currentIndex: number, totalCount: number): Promise<void> {
+    try {
+      const survey = await this.apiService.GetLakeData(lake.id);
+
+      if (!survey || typeof survey !== 'object' || survey.status !== 'SUCCESS' || survey.message !== 'Normal execution.') {
+        this.lakeTableData.push(this.buildUnavailableSurveyRow(lake));
+        return;
+      }
+
+      const surveyData = Array.isArray(survey.result?.surveys) ? survey.result.surveys : [];
+      if (!surveyData.length) {
+        this.lakeTableData.push(this.buildUnavailableSurveyRow(lake));
+        return;
+      }
+
+      const normalized = surveyData.map((d: any) => ({ ...d, surveyDate: new Date(d.surveyDate) }));
+      normalized.sort((a: any, b: any) => a.surveyDate - b.surveyDate);
+      const latestSurvey = normalized.filter((x: any) => x.surveyType === 'Standard Survey').pop();
+      if (!latestSurvey) {
+        this.lakeTableData.push(this.buildUnavailableSurveyRow(lake));
+        return;
+      }
+
+      const speciesRows = this.getSpeciesRows(latestSurvey, this.speciesInput || '');
+      if (!speciesRows.length) {
+        this.lakeTableData.push(this.buildUnavailableSurveyRow(lake));
+        return;
+      }
+
+      for (const row of speciesRows) {
+        this.lakeTableData.push({
+          name: lake.name,
+          county: lake.county,
+          lakeSize: survey.result?.areaAcres ?? lake.area ?? 'N/A',
+          speciesName: row.speciesName,
+          speciesdata: row.speciesSummary,
+          fishlengths: row.fishlengths,
+          surveyDate: latestSurvey.surveyDate,
+          lakeid: lake.id,
+          narrative: latestSurvey.narrative,
+          waterAccess: lake.point?.['epsg:4326'],
+          distanceMiles: this.getDistanceMilesForLake({ waterAccess: lake.point?.['epsg:4326'] })
+        });
+      }
+
+      if (currentIndex % 10 === 0 || currentIndex === totalCount) {
+        this.setStatus(`Processed ${currentIndex} of ${totalCount} lake(s)...`);
+      }
+    } catch (err) {
+      console.error(`Error processing lake ${lake.name}:`, err);
+      this.lakeTableData.push(this.buildUnavailableSurveyRow(lake));
+    }
+  }
+
+  private buildUnavailableSurveyRow(lake: any): any {
+    const empty = { zero:0,one:0,two:0,three:0,four:0,five:0,six:0,seven:0,eight:0,nine:0,ten:0,eleven:0,twelve:0,total:0 };
+    return {
+      name: lake.name, county: lake.county, lakeSize: lake.area ?? 'N/A',
+      speciesName: 'No survey data available', speciesdata: null, fishlengths: empty,
+      surveyDate: null, lakeid: lake.id, narrative: null,
+      waterAccess: lake.point?.['epsg:4326'],
+      distanceMiles: this.getDistanceMilesForLake({ waterAccess: lake.point?.['epsg:4326'] })
+    };
+  }
+
+  private getSpeciesRows(survey: any, speciesToAnalyze: string) {
+    const fishCatchSummaries = Array.isArray(survey.fishCatchSummaries) ? survey.fishCatchSummaries : [];
+    const summarySpecies = fishCatchSummaries.map((f: any) => f.species).filter(Boolean);
+    const lengthSpecies = Object.keys(survey.lengths ?? {}).filter((k: string) => {
+      const fc = survey.lengths?.[k]?.fishCount;
+      return Array.isArray(fc) && fc.length > 0;
+    });
+    const speciesNames: string[] = speciesToAnalyze
+      ? [speciesToAnalyze]
+      : Array.from(new Set([...summarySpecies, ...lengthSpecies]));
+
+    return speciesNames
+      .map((speciesName: string) => {
+        const speciesSummary = [...fishCatchSummaries].reverse().find((f: any) => f.species === speciesName) ?? null;
+        const lenStats = this.revealfishlengthstats(survey, speciesName);
+        const fishlengths = {
+          zero:lenStats[0],one:lenStats[1],two:lenStats[2],three:lenStats[3],four:lenStats[4],
+          five:lenStats[5],six:lenStats[6],seven:lenStats[7],eight:lenStats[8],nine:lenStats[9],
+          ten:lenStats[10],eleven:lenStats[11],twelve:lenStats[12],total:lenStats[13]
+        };
+        const displayName = this.species.find((s: any) =>
+          s.Id?.toString().trim() === speciesName || s.Species?.trim().toLowerCase() === speciesName.toLowerCase()
+        )?.Species?.trim() ?? speciesName;
+        return { speciesName: displayName, speciesSummary, fishlengths };
+      })
+      .filter((r: any) => r.fishlengths.total > 0 || r.speciesSummary);
   }
 
   public GoToLake(lakeid: number) {
@@ -387,9 +435,51 @@ export class SearchByLake implements OnInit {
     this.cdr.detectChanges();
   }
 
+  get groupedLakeTableData() {
+    const groups = new Map<string, any[]>();
+    for (const row of this.lakeTableData) {
+      const key = `${row.lakeid ?? ''}-${row.name ?? ''}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(row);
+    }
+    return Array.from(groups.entries()).map(([groupKey, rows]) => {
+      const first = rows[0] ?? {};
+      const hasSpeciesData = rows.some((r: any) => r.speciesName !== 'No survey data available');
+      return {
+        groupKey,
+        lakeName: first.name ?? 'Unknown lake',
+        county: first.county ?? '',
+        lakeId: first.lakeid,
+        waterAccess: first.waterAccess,
+        narrative: first.narrative,
+        distanceMiles: first.distanceMiles,
+        hasSpeciesData,
+        rows: rows.slice().sort((a, b) => (a.speciesName || '').localeCompare(b.speciesName || '')),
+        surveyDate: rows.find((r: any) => r.surveyDate)?.surveyDate ?? null,
+        lakeSize: rows.find((r: any) => r.lakeSize != null && r.lakeSize !== 'N/A')?.lakeSize ?? null
+      };
+    });
+  }
+
+  toggleLakeGroup(groupKey: string): void {
+    this.expandedLakeGroups[groupKey] = !(this.expandedLakeGroups[groupKey] ?? false);
+  }
+
+  trackByGroupKey(_index: number, group: any): string {
+    return group.groupKey;
+  }
+
+  isLakeGroupExpanded(groupKey: string): boolean {
+    return this.expandedLakeGroups[groupKey] ?? false;
+  }
+
   private getSelectedSpeciesText(): string {
     const selected = this.species.find((s: any) => s.Id == this.speciesInput);
     return selected?.Species?.trim() ?? this.speciesInput?.trim() ?? '';
+  }
+
+  getSelectedSpeciesName(): string {
+    return this.getSelectedSpeciesText();
   }
 
   private highlightSpecies(content: string): string {
