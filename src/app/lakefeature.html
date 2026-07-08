@@ -1,0 +1,84 @@
+<div class="container mt-3">
+  <h2>Search by lake features</h2>
+
+  <div class="row g-3 mb-3">
+    <div class="col-md-4">
+      <label for="county-select" class="form-label">County</label>
+      <select id="county-select" [(ngModel)]="countyInput" class="form-select">
+        <option [value]="0">Any</option>
+        <option *ngFor="let county of counties" [value]="county.Id">{{ county.County }}</option>
+      </select>
+    </div>
+
+    <div class="col-md-4">
+      <label for="public-access-select" class="form-label">Public access</label>
+      <select id="public-access-select" [(ngModel)]="publicAccessInput" class="form-select">
+        <option *ngFor="let option of publicAccessOptions" [value]="option">{{ option }}</option>
+      </select>
+    </div>
+
+    <div class="col-md-4">
+      <label for="water-clarity-select" class="form-label">Water clarity</label>
+      <select id="water-clarity-select" [(ngModel)]="waterClarityInput" class="form-select">
+        <option *ngFor="let option of waterClarityOptions" [value]="option">{{ option }}</option>
+      </select>
+    </div>
+
+    <div class="col-md-4">
+      <label for="max-depth-select" class="form-label">Max depth</label>
+      <select id="max-depth-select" [(ngModel)]="maxDepthInput" (ngModelChange)="onMaxDepthChange($event)" class="form-select">
+        <option *ngFor="let option of maxDepthOptions" [value]="option">{{ option }}</option>
+      </select>
+    </div>
+
+    <div class="col-md-4">
+      <label for="mean-depth-select" class="form-label">Mean depth</label>
+      <select id="mean-depth-select" [(ngModel)]="meanDepthInput" (ngModelChange)="onMeanDepthChange($event)" class="form-select">
+        <option *ngFor="let option of meanDepthOptions" [value]="option" [disabled]="!isMeanDepthOptionAllowed(option)">{{ option }}</option>
+      </select>
+      <div *ngIf="maxDepthInput !== 'Any'" class="form-text text-muted">
+        Mean depth options are limited by the selected max depth.
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <label for="lake-size-select" class="form-label">Lake size</label>
+      <select id="lake-size-select" [(ngModel)]="lakeSizeInput" class="form-select">
+        <option *ngFor="let option of lakeSizeOptions" [value]="option">{{ option }}</option>
+      </select>
+    </div>
+    <div class="col-12">
+      <button class="btn btn-primary" (click)="searchByCounty()">Search</button>
+    </div>
+  </div>
+
+  <div class="mt-3">
+    <div class="alert alert-info" *ngIf="searchStatus">{{ searchStatus }}</div>
+    <div *ngIf="lakeFeatureResults.length">
+      <h5>Lake feature results</h5>
+      <p>{{ lakeFeatureResults.length }} lake(s) loaded.</p>
+      <table class="table table-sm table-striped">
+        <thead>
+          <tr>
+            <th (click)="sortByColumn('name')" style="cursor:pointer">Name</th>
+            <th (click)="sortByColumn('lake size')" style="cursor:pointer">Lake size</th>
+            <th (click)="sortByColumn('water clarity')" style="cursor:pointer">Water clarity</th>
+            <th (click)="sortByColumn('Max depth')" style="cursor:pointer">Max depth</th>
+            <th (click)="sortByColumn('Mean depth')" style="cursor:pointer">Mean depth</th>
+            <th (click)="sortByColumn('Public access')" style="cursor:pointer">Public access</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let item of lakeFeatureResults">
+            <td>{{ item.name }}</td>
+            <td>{{ item['lake size'] }}</td>
+            <td>{{ item['water clarity'] }}</td>
+            <td>{{ item['Max depth'] }}</td>
+            <td>{{ item['Mean depth'] }}</td>
+            <td>{{ item['Public access'] }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

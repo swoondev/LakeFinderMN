@@ -1,0 +1,178 @@
+&nbsp;
+<div class="col-lg-12">
+    <label for="species-select">Species</label>
+    <select id="species-select" [(ngModel)]="speciesInput" class="form-select mb-2">
+        <option *ngFor="let s of species" [value]="s.Id">{{ s.Species }}</option>
+    </select>
+    <label for="county-select">County</label>
+    <select id="county-select" [(ngModel)]="countyInput" class="form-select mb-2">
+        <option [value]="0">All of MN</option>
+        <option *ngFor="let c of counties" [value]="c.Id">{{ c.County }}</option>
+    </select>
+    <button type="button" class="btn btn-primary" (click)="searchLakes(countyInput)">Search</button>
+</div>
+<div class="col-lg-12">
+    <h1>Searching {{currentcounty}} County {{lakeCount}}</h1>
+    <h2>{{countyCount}}</h2>
+    <p>{{searchstatus}}</p>
+</div>
+<div class="col-lg-12" *ngIf="!searched">
+    <p>Please enter search criteria and click Search to view results.</p>
+</div>
+
+<div class="col-lg-12 w-auto" *ngIf="searched">
+    <div class="mb-2 text-end">
+        <button type="button" class="btn btn-sm btn-secondary me-2" (click)="clearFilters()">Clear filters</button>
+        <button type="button" class="btn btn-sm btn-secondary" (click)="saveAsPdf()">Save as PDF</button>
+    </div>
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th colspan="6"></th>
+                <th colspan="13" class="text-center">Fish lengths</th>
+                <th></th>
+            </tr>
+            <tr>
+                <th>#</th>
+                <th><a href="javascript:void(0)" (click)="sortBy('name')">Name <span *ngIf="sortColumn==='name'">{{ sortDirection==='asc' ? '▲' : '▼' }}</span></a></th>
+                <th><a href="javascript:void(0)" (click)="sortBy('distance')">Distance <span *ngIf="sortColumn==='distance'">{{ sortDirection==='asc' ? '▲' : '▼' }}</span></a></th>
+                <th><a href="javascript:void(0)" (click)="sortBy('averageWeight')">Average Weight <span *ngIf="sortColumn==='averageWeight'">{{ sortDirection==='asc' ? '▲' : '▼' }}</span></a></th>
+                <th><a href="javascript:void(0)" (click)="sortBy('surveyDate')">Survey Date <span *ngIf="sortColumn==='surveyDate'">{{ sortDirection==='asc' ? '▲' : '▼' }}</span></a></th>
+                <th><a href="javascript:void(0)" (click)="sortBy('lakeSize')">Lake Size <span *ngIf="sortColumn==='lakeSize'">{{ sortDirection==='asc' ? '▲' : '▼' }}</span></a></th>
+                <th><a href="javascript:void(0)" (click)="sortBy('zero')">0-5" <span *ngIf="sortColumn==='zero'">{{ sortDirection==='asc' ? '▲' : '▼' }}</span></a></th>
+                <th><a href="javascript:void(0)" (click)="sortBy('one')">6-7" <span *ngIf="sortColumn==='one'">{{ sortDirection==='asc' ? '▲' : '▼' }}</span></a></th>
+                <th><a href="javascript:void(0)" (click)="sortBy('two')">8-9" <span *ngIf="sortColumn==='two'">{{ sortDirection==='asc' ? '▲' : '▼' }}</span></a></th>
+                <th><a href="javascript:void(0)" (click)="sortBy('three')">10-11" <span *ngIf="sortColumn==='three'">{{ sortDirection==='asc' ? '▲' : '▼' }}</span></a></th>
+                <th><a href="javascript:void(0)" (click)="sortBy('four')">12-14" <span *ngIf="sortColumn==='four'">{{ sortDirection==='asc' ? '▲' : '▼' }}</span></a></th>
+                <th><a href="javascript:void(0)" (click)="sortBy('five')">15-19" <span *ngIf="sortColumn==='five'">{{ sortDirection==='asc' ? '▲' : '▼' }}</span></a></th>
+                <th><a href="javascript:void(0)" (click)="sortBy('six')">20-24" <span *ngIf="sortColumn==='six'">{{ sortDirection==='asc' ? '▲' : '▼' }}</span></a></th>
+                <th><a href="javascript:void(0)" (click)="sortBy('seven')">25-29" <span *ngIf="sortColumn==='seven'">{{ sortDirection==='asc' ? '▲' : '▼' }}</span></a></th>
+                <th><a href="javascript:void(0)" (click)="sortBy('eight')">30-34" <span *ngIf="sortColumn==='eight'">{{ sortDirection==='asc' ? '▲' : '▼' }}</span></a></th>
+                <th><a href="javascript:void(0)" (click)="sortBy('nine')">35-39" <span *ngIf="sortColumn==='nine'">{{ sortDirection==='asc' ? '▲' : '▼' }}</span></a></th>
+                <th><a href="javascript:void(0)" (click)="sortBy('ten')">40-44" <span *ngIf="sortColumn==='ten'">{{ sortDirection==='asc' ? '▲' : '▼' }}</span></a></th>
+                <th><a href="javascript:void(0)" (click)="sortBy('eleven')">45-49" <span *ngIf="sortColumn==='eleven'">{{ sortDirection==='asc' ? '▲' : '▼' }}</span></a></th>
+                <th><a href="javascript:void(0)" (click)="sortBy('twelve')">50-100" <span *ngIf="sortColumn==='twelve'">{{ sortDirection==='asc' ? '▲' : '▼' }}</span></a></th>
+                <th><a href="javascript:void(0)" (click)="sortBy('total')">Total <span *ngIf="sortColumn==='total'">{{ sortDirection==='asc' ? '▲' : '▼' }}</span></a></th>
+            </tr>
+            <tr>
+                <th></th>
+                <th></th>
+                <th>
+                    <div class="d-flex">
+                        <input type="number" step="0.1" [(ngModel)]="filters.distanceMin" class="form-control form-control-sm me-1" placeholder="Min" />
+                        <input type="number" step="0.1" [(ngModel)]="filters.distanceMax" class="form-control form-control-sm" placeholder="Max" />
+                    </div>
+                </th>
+                <th>
+                    <div class="d-flex">
+                        <select class="form-select form-select-sm me-1" [(ngModel)]="filters.averageWeightMin">
+                            <option value="">Min</option>
+                            <option *ngFor="let o of getAverageWeightOptions()" [value]="o">{{ o }}</option>
+                        </select>
+                        <select class="form-select form-select-sm" [(ngModel)]="filters.averageWeightMax">
+                            <option value="">Max</option>
+                            <option *ngFor="let o of getAverageWeightOptions()" [value]="o">{{ o }}</option>
+                        </select>
+                    </div>
+                </th>
+                <th>
+                    <div class="d-flex flex-column">
+                        <select class="form-select form-select-sm" [(ngModel)]="filters.surveyYearFrom">
+                            <option value="">From year</option>
+                            <option *ngFor="let o of getSurveyYearOptions()" [value]="o">{{ o }}</option>
+                        </select>
+                        <select class="form-select form-select-sm mt-1" [(ngModel)]="filters.surveyYearTo">
+                            <option value="">To year</option>
+                            <option *ngFor="let o of getSurveyYearOptions()" [value]="o">{{ o }}</option>
+                        </select>
+                    </div>
+                </th>
+                <th>
+                    <div class="d-flex">
+                        <select class="form-select form-select-sm me-1" [(ngModel)]="filters.lakeSizeMin">
+                            <option value="">Min</option>
+                            <option *ngFor="let o of getLakeSizeOptions()" [value]="o">{{ o }}</option>
+                        </select>
+                        <select class="form-select form-select-sm" [(ngModel)]="filters.lakeSizeMax">
+                            <option value="">Max</option>
+                            <option *ngFor="let o of getLakeSizeOptions()" [value]="o">{{ o }}</option>
+                        </select>
+                    </div>
+                </th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th></th>
+                <th>
+                    <div class="d-flex flex-column">
+                        <input type="number" step="1" [(ngModel)]="filters.totalMin" class="form-control form-control-sm" placeholder="Min" />
+                        <input type="number" step="1" [(ngModel)]="filters.totalMax" class="form-control form-control-sm mt-1" placeholder="Max" />
+                    </div>
+                </th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr *ngFor="let lake of filteredFishtable; let i = index">
+                <th scope="row">{{ i + 1 }}</th>
+                <td>
+                    <a href="javascript:void(0)" (click)="GoToLake(lake.lakeid)">{{ lake.name }}</a>
+                    &nbsp;&nbsp;
+                    <a href="javascript:void(0)" (click)="GoToWaterAccess(lake.waterAccess[1], lake.waterAccess[0])" title="Get directions to lake">
+                        <svg width="15" height="15" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Water Access Site">
+                            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#000"/>
+                            <circle cx="12" cy="9" r="2.5" fill="#fff"/>
+                        </svg>
+                    </a>
+                    <button type="button" class="dialog-open-button" (click)="openDialog(lake.narrative)" title="Lake Summary">
+                        <font size="2">Summary</font>
+                    </button>
+                    <button type="button" class="dialog-open-button" (click)="openTopo(lake.waterAccess[1], lake.waterAccess[0])" title="Lake Topo">
+                        <font size="2">Lake Topo Chart</font>
+                    </button>
+                </td>
+                <td>{{ lake.distanceMiles !== null && lake.distanceMiles !== undefined ? (lake.distanceMiles | number:'1.0-1') + ' mi' : 'N/A' }}</td>
+                <td>{{ lake.speciesdata.averageWeight }}</td>
+                <td>{{ lake.surveyDate | date:'shortDate' }}</td>
+                <td>{{ lake.lakeSize !== null && lake.lakeSize !== undefined ? lake.lakeSize : 'N/A' }}</td>
+                <td>{{ lake.fishlengths.zero }}</td>
+                <td>{{ lake.fishlengths.one }}</td>
+                <td>{{ lake.fishlengths.two }}</td>
+                <td>{{ lake.fishlengths.three }}</td>
+                <td>{{ lake.fishlengths.four }}</td>
+                <td>{{ lake.fishlengths.five }}</td>
+                <td>{{ lake.fishlengths.six }}</td>
+                <td>{{ lake.fishlengths.seven }}</td>
+                <td>{{ lake.fishlengths.eight }}</td>
+                <td>{{ lake.fishlengths.nine }}</td>
+                <td>{{ lake.fishlengths.ten }}</td>
+                <td>{{ lake.fishlengths.eleven }}</td>
+                <td>{{ lake.fishlengths.twelve }}</td>
+                <td>{{ lake.fishlengths.total }}</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<div class="dialog-backdrop" *ngIf="dialogVisible">
+    <div class="dialog-box">
+        <div class="dialog-header">
+            <h3>Lake Summary</h3>
+            <button type="button" class="dialog-close" (click)="closeDialog()">&times;</button>
+        </div>
+        <div class="dialog-body">
+            <div [innerHTML]="safeDialogContent"></div>
+        </div>
+        <div class="dialog-footer">
+            <button type="button" class="btn btn-secondary" (click)="closeDialog()">Close</button>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,120 @@
+<div class="col-lg-12">
+    <label for="lake-name">Lake name</label>
+    <input id="lake-name" type="text" [(ngModel)]="lakeName" class="form-control mb-2" placeholder="Enter lake name" />
+
+    <label for="county-select">County</label>
+    <select id="county-select" [(ngModel)]="countyInput" class="form-select mb-2">
+        <option [value]="0">All of MN</option>
+        <option *ngFor="let c of counties" [value]="c.Id">{{ c.County }}</option>
+    </select>
+
+    <label for="species-select">Fish species</label>
+    <select id="species-select" [(ngModel)]="speciesInput" class="form-select mb-2">
+        <option value="">All species</option>
+        <option *ngFor="let s of species" [value]="s.Id">{{ s.Species }}</option>
+    </select>
+
+    <button type="button" class="btn btn-primary mb-3" (click)="getLakeByName(lakeName, countyInput)" [disabled]="isSearching">Search</button>
+</div>
+
+<div class="col-lg-12 mb-3">
+    <p>{{ searchstatus }}</p>
+</div>
+
+<div class="col-lg-12" *ngIf="hasSearched && !isSearching && !lakeTableData.length">
+    <p class="text-muted">No lakes found with survey data. Try a different search.</p>
+</div>
+
+<div class="col-lg-12 mt-3" *ngIf="hasSearched && !isSearching && lakeTableData.length">
+
+    <div *ngFor="let group of groupedLakeTableData; trackBy: trackByGroupKey" class="lake-group mb-5">
+        <div class="lake-group-header d-flex align-items-center gap-2">
+            <h5 class="mb-0 d-flex align-items-center gap-2">
+                <a href="javascript:void(0)" (click)="GoToLake(group.lakeId)">{{ group.lakeName }}</a>
+                <span *ngIf="group.county" class="text-muted fw-normal fs-6"> ({{ group.county }}) </span>
+                <span *ngIf="speciesInput && !group.hasSpeciesData" class="badge bg-secondary fw-normal" style="font-size:0.72rem">No {{ getSelectedSpeciesName() }} data </span>
+                <button *ngIf="group.hasSpeciesData" type="button" class="btn btn-sm btn-outline-secondary p-0 px-1" style="font-size:1rem;line-height:1.2" (click)="toggleLakeGroup(group.groupKey)">
+                    {{ isLakeGroupExpanded(group.groupKey) ? '▾' : '▸' }}
+                </button>
+                <span *ngIf="group.hasSpeciesData" class="text-muted small" style="cursor:pointer" (click)="toggleLakeGroup(group.groupKey)">
+                    {{ isLakeGroupExpanded(group.groupKey) ? 'Collapse' : 'Click to expand' }}
+                </span>
+            </h5>
+            <span *ngIf="group.distanceMiles != null" class="text-muted small">
+                {{ group.distanceMiles | number:'1.0-1' }} mi
+            </span>
+            <a href="javascript:void(0)" (click)="GoToWaterAccess(group.waterAccess[1], group.waterAccess[0])" title="Get directions to lake" *ngIf="group.waterAccess">
+                <svg width="15" height="15" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Water Access Site">
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="#000"/>
+                    <circle cx="12" cy="9" r="2.5" fill="#fff"/>
+                </svg>
+            </a>
+            <button type="button" class="dialog-open-button" (click)="openDialog(group.narrative)" title="Lake Summary" *ngIf="group.narrative">
+                <font size="2">Summary</font>
+            </button>
+            <button type="button" class="dialog-open-button" (click)="openTopo(group.waterAccess[1], group.waterAccess[0])" title="Lake Topo" *ngIf="group.waterAccess">
+                <font size="2">Lake Topo Chart</font>
+            </button>
+            <span *ngIf="!group.hasSpeciesData" class="text-muted small fst-italic">No fish data available</span>
+            <span *ngIf="group.surveyDate" class="text-muted small"> Survey: {{ group.surveyDate | date:'mediumDate' }}</span>
+            <span *ngIf="group.surveyDate && group.lakeSize != null" class="text-muted small mx-1"> | </span>
+            <span *ngIf="group.lakeSize != null" class="text-muted small">Lake size: {{ group.lakeSize }} acres</span>
+        </div>
+
+        <div *ngIf="isLakeGroupExpanded(group.groupKey)" class="lake-group-body">
+            <table class="table table-striped table-sm lake-table">
+                <thead>
+                    <tr>
+                        <th colspan="3"></th>
+                        <th colspan="14" class="text-center">Fish lengths</th>
+                    </tr>
+                    <tr>
+                        <th>#</th>
+                        <th>Species</th>
+                        <th>Avg Weight</th>
+                        <th>0-5"</th><th>6-7"</th><th>8-9"</th><th>10-11"</th><th>12-14"</th>
+                        <th>15-19"</th><th>20-24"</th><th>25-29"</th><th>30-34"</th><th>35-39"</th>
+                        <th>40-44"</th><th>45-49"</th><th>50-100"</th>
+                        <th>Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr *ngFor="let row of group.rows; let i = index">
+                        <th scope="row">{{ i + 1 }}</th>
+                        <td>{{ row.speciesName || 'N/A' }}</td>
+                        <td>{{ row.speciesdata?.averageWeight ?? 'N/A' }}</td>
+                        <td>{{ row.fishlengths.zero }}</td>
+                        <td>{{ row.fishlengths.one }}</td>
+                        <td>{{ row.fishlengths.two }}</td>
+                        <td>{{ row.fishlengths.three }}</td>
+                        <td>{{ row.fishlengths.four }}</td>
+                        <td>{{ row.fishlengths.five }}</td>
+                        <td>{{ row.fishlengths.six }}</td>
+                        <td>{{ row.fishlengths.seven }}</td>
+                        <td>{{ row.fishlengths.eight }}</td>
+                        <td>{{ row.fishlengths.nine }}</td>
+                        <td>{{ row.fishlengths.ten }}</td>
+                        <td>{{ row.fishlengths.eleven }}</td>
+                        <td>{{ row.fishlengths.twelve }}</td>
+                        <td>{{ row.fishlengths.total }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="dialog-backdrop" *ngIf="dialogVisible">
+    <div class="dialog-box">
+        <div class="dialog-header">
+            <h3>Lake Summary</h3>
+            <button type="button" class="dialog-close" (click)="closeDialog()">&times;</button>
+        </div>
+        <div class="dialog-body">
+            <div [innerHTML]="safeDialogContent"></div>
+        </div>
+        <div class="dialog-footer">
+            <button type="button" class="btn btn-secondary" (click)="closeDialog()">Close</button>
+        </div>
+    </div>
+</div>
